@@ -1,0 +1,7 @@
+{
+  "name": "Zyra Billiard POS",
+  "description": "Real-time Point of Sale for Billiard and Cafe management with multi-device sync.",
+  "requestFramePermissions": [
+    "bluetooth"
+  ]
+}
