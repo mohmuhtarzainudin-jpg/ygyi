@@ -2611,7 +2611,7 @@ const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Oper
         <div className="bg-secondary p-6 rounded-xl border border-slate-700 h-fit lg:col-span-2">
            <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-4">
                <h3 className="font-bold flex items-center gap-2 text-lg"><Store size={20} className="text-accent" /> Pengaturan Toko & Struk</h3>
-               {/* BluetoothPrinter temporarily disabled */}
+               <BluetoothPrinter />
            </div>
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2678,19 +2678,23 @@ const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Oper
         <div className="bg-secondary p-6 rounded-xl border border-slate-700 h-fit">
           <h3 className="font-bold mb-4 flex items-center gap-2"><Users size={20} /> Akun Login</h3>
           <div className="space-y-3">
-            {users.map(u => (
-              <div key={u.id} className="flex justify-between items-center bg-slate-800 p-3 rounded">
-                <div>
-                  <p className="font-bold text-white">{u.name}</p>
-                  <p className="text-xs text-slate-400 capitalize">{u.role}</p>
-                  <div className="font-mono bg-slate-900 px-2 py-1 rounded text-xs text-slate-500">PIN: {u.pin}</div>
+            {users && Array.isArray(users) && users.length > 0 ? (
+              users.map(u => (
+                <div key={u.id} className="flex justify-between items-center bg-slate-800 p-3 rounded">
+                  <div>
+                    <p className="font-bold text-white">{u.name}</p>
+                    <p className="text-xs text-slate-400 capitalize">{u.role}</p>
+                    <div className="font-mono bg-slate-900 px-2 py-1 rounded text-xs text-slate-500">PIN: {u.pin}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditUser(u)} className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs">Edit</button>
+                    <button onClick={() => setDeleteUser(u)} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">Hapus</button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setEditUser(u)} className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs">Edit</button>
-                  <button onClick={() => setDeleteUser(u)} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">Hapus</button>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-slate-400 text-sm">Tidak ada akun login tersedia.</p>
+            )}
           </div>
           <div className="mt-4 border-t border-slate-700 pt-4">
             <h4 className="font-bold mb-2 text-sm">Tambah Akun Login</h4>
