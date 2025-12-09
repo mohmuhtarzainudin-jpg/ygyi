@@ -50,6 +50,9 @@ export interface Table {
   duration?: number; // Minutes
   endTime?: number; // Timestamp
   remoteUrl?: string; // Arduino link
+  remoteOn?: string; // explicit ON URL (optional)
+  remoteOff?: string; // explicit OFF URL (optional)
+  remoteToggle?: string; // explicit TOGGLE URL (optional)
   costPerHour: number;
   currentCustomer?: string; // Track who is playing
 }

@@ -96,6 +96,43 @@ async function controlLamp(num: number, action: 'on' | 'off' | 'toggle' = 'toggl
   }
 }
 
+// Use table-specific URLs if provided, else fallback to controlLamp using numeric endpoint
+async function controlLampForTable(table: Table, action: 'on' | 'off' | 'toggle' = 'toggle', durationSec?: number) {
+  try {
+    // prefer explicit URLs configured per table
+    let url: string | undefined;
+    if (action === 'on' && table.remoteOn) url = table.remoteOn;
+    else if (action === 'off' && table.remoteOff) url = table.remoteOff;
+    else if (action === 'toggle' && table.remoteToggle) url = table.remoteToggle;
+
+    if (url) {
+      if (durationSec && durationSec > 0) {
+        // append duration param if not present
+        url += (url.includes('?') ? '&' : '?') + `duration=${durationSec}`;
+      }
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 5000);
+      try {
+        const res = await fetch(url, { method: 'GET', mode: 'cors', signal: controller.signal });
+        clearTimeout(id);
+        const text = await res.text().catch(() => undefined);
+        return { ok: res.ok, status: res.status, text };
+      } catch (err: any) {
+        clearTimeout(id);
+        return { ok: false, error: err.name === 'AbortError' ? 'timeout' : String(err) };
+      }
+    }
+
+    // fallback: derive number and use default endpoint
+    // try to infer number from name or tables ordering (best-effort)
+    // Caller may pass table with name and rely on deriveTableNumber elsewhere
+    const inferredNum = deriveTableNumber(table.name, 0);
+    return controlLamp(inferredNum, action, durationSec);
+  } catch (e: any) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 // Derive table number from table name (e.g. "Meja 1") or fallback to index+1
 function deriveTableNumber(tableName: string | undefined, index: number) {
   if (!tableName) return index + 1;
@@ -1237,13 +1274,23 @@ const TableCard: React.FC<TableCardProps> = ({ table, onStart, onStop, onTopup, 
         )}
       </div>
       
-      {table.remoteUrl && (
-         <div className="absolute top-2 right-12">
-            <a href={table.remoteUrl} target="_blank" rel="noreferrer" className="text-slate-600 hover:text-white" title="Kontrol Lampu">
-              <ExternalLink size={14} />
-            </a>
-         </div>
-      )}
+      <div className="absolute top-2 right-12 flex gap-2">
+        {table.remoteOn && (
+          <a href={table.remoteOn} target="_blank" rel="noreferrer" className="text-emerald-400 hover:text-white" title="Lampu ON">
+            <Power size={14} />
+          </a>
+        )}
+        {table.remoteOff && (
+          <a href={table.remoteOff} target="_blank" rel="noreferrer" className="text-red-400 hover:text-white" title="Lampu OFF">
+            <Power size={14} />
+          </a>
+        )}
+        {table.remoteToggle && (
+          <a href={table.remoteToggle} target="_blank" rel="noreferrer" className="text-slate-600 hover:text-white" title="Lampu TOGGLE">
+            <ExternalLink size={14} />
+          </a>
+        )}
+      </div>
     </div>
   );
 };
@@ -1472,7 +1519,9 @@ const MoveTableModal: React.FC<{ storeId: string, fromTable: Table, tables: Tabl
 const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose: () => void }> = ({ storeId, tables, onClose }) => {
   const [newTableName, setNewTableName] = useState('');
   const [newTableCost, setNewTableCost] = useState(20000);
-  const [newTableRemote, setNewTableRemote] = useState('');
+  const [newTableRemoteOn, setNewTableRemoteOn] = useState('');
+  const [newTableRemoteOff, setNewTableRemoteOff] = useState('');
+  const [newTableRemoteToggle, setNewTableRemoteToggle] = useState('');
 
   const handleAddTable = async () => {
     if (!newTableName) return;
@@ -1482,10 +1531,14 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
         name: newTableName,
         status: 'available',
         costPerHour: Number(newTableCost),
-        remoteUrl: newTableRemote
+        remoteOn: newTableRemoteOn || '',
+        remoteOff: newTableRemoteOff || '',
+        remoteToggle: newTableRemoteToggle || ''
       });
       setNewTableName('');
-      setNewTableRemote('');
+      setNewTableRemoteOn('');
+      setNewTableRemoteOff('');
+      setNewTableRemoteToggle('');
     } catch (e) {
       console.error(e);
       alert("Gagal menambah meja");
@@ -1508,9 +1561,11 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
      } catch (e) { console.error(e); }
   };
 
-  const handleUpdateRemote = async (id: string, url: string) => {
+  const handleUpdateRemoteField = async (id: string, field: 'remoteOn' | 'remoteOff' | 'remoteToggle', url: string) => {
      try {
-       await updateDoc(doc(db, `stores/${storeId}/tables`, id), { remoteUrl: url });
+       const updateObj: any = {};
+       updateObj[field] = url;
+       await updateDoc(doc(db, `stores/${storeId}/tables`, id), updateObj);
      } catch (e) { console.error(e); }
   };
 
@@ -1565,25 +1620,41 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
                  </button>
                </div>
                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-slate-500">Harga/Jam</label>
-                    <input 
-                      type="number" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                      defaultValue={table.costPerHour}
-                      onBlur={(e) => handleUpdatePrice(table.id, Number(e.target.value))}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500">Link Remote</label>
-                    <input 
-                      type="text" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                      defaultValue={table.remoteUrl}
-                      placeholder="http://..."
-                      onBlur={(e) => handleUpdateRemote(table.id, e.target.value)}
-                    />
-                  </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500">Harga/Jam</label>
+                        <input 
+                          type="number" 
+                          className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                          defaultValue={table.costPerHour}
+                          onBlur={(e) => handleUpdatePrice(table.id, Number(e.target.value))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500">Remote ON / OFF / TOGGLE (optional)</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                            defaultValue={table.remoteOn}
+                            placeholder="http://.../action=on"
+                            onBlur={(e) => handleUpdateRemoteField(table.id, 'remoteOn', e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                            defaultValue={table.remoteOff}
+                            placeholder="http://.../action=off"
+                            onBlur={(e) => handleUpdateRemoteField(table.id, 'remoteOff', e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                            defaultValue={table.remoteToggle}
+                            placeholder="http://.../action=toggle"
+                            onBlur={(e) => handleUpdateRemoteField(table.id, 'remoteToggle', e.target.value)}
+                          />
+                        </div>
+                      </div>
                </div>
              </div>
            ))}
