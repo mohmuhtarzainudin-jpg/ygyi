@@ -167,6 +167,33 @@ const Modal: React.FC<ModalProps> = ({ children, onClose, title }) => (
   </div>
 );
 
+// Simple Error Boundary to avoid full blank screen when modal render fails
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: any }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: any, info: any) {
+    console.error('ErrorBoundary caught', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Modal title="Error" onClose={() => { this.setState({ hasError: false, error: undefined }); }}>
+          <div className="p-4">
+            <p className="text-red-400">Terjadi kesalahan saat membuka modal. Cek console untuk detil.</p>
+            <pre className="text-xs mt-2 text-slate-300">{String(this.state.error)}</pre>
+          </div>
+        </Modal>
+      );
+    }
+    return this.props.children as React.ReactElement;
+  }
+}
+
 // --- Main App Component ---
 
 const App: React.FC = () => {
@@ -1174,11 +1201,13 @@ const BilliardScreen: React.FC<BilliardScreenProps> = ({ storeId, tables, onAddT
       )}
 
       {manageTableMode && (
-        <TableManagementModal 
-          storeId={storeId} 
-          tables={tables} 
-          onClose={() => setManageTableMode(false)} 
-        />
+        <ErrorBoundary>
+          <TableManagementModal 
+            storeId={storeId} 
+            tables={tables} 
+            onClose={() => setManageTableMode(false)} 
+          />
+        </ErrorBoundary>
       )}
 
       {isMovingTable && (
