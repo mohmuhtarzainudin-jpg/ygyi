@@ -769,6 +769,11 @@ const App: React.FC = () => {
           {activeTab === 'history' && <TransactionHistoryScreen transactions={transactions} />}
           {activeTab === 'inventory' && currentUser.role === 'admin' && <InventoryScreen storeId={storeId!} products={products} ingredients={ingredients} />}
           {activeTab === 'settings' && currentUser.role === 'admin' && <SettingsScreen storeId={storeId!} users={users} operators={operators} />}
+                {activeTab === 'settings' && currentUser.role === 'admin' && (
+                  <ErrorBoundary>
+                    <SettingsScreen storeId={storeId!} users={users} operators={operators} />
+                  </ErrorBoundary>
+                )}
         </div>
       </main>
 
