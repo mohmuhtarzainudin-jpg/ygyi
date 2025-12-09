@@ -2611,7 +2611,7 @@ const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Oper
         <div className="bg-secondary p-6 rounded-xl border border-slate-700 h-fit lg:col-span-2">
            <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-4">
                <h3 className="font-bold flex items-center gap-2 text-lg"><Store size={20} className="text-accent" /> Pengaturan Toko & Struk</h3>
-               <BluetoothPrinter />
+               {/* BluetoothPrinter temporarily disabled */}
            </div>
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
