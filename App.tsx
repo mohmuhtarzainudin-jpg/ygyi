@@ -1678,37 +1678,35 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
               value={newTableName}
               onChange={(e) => setNewTableName(e.target.value)}
             />
-            <div className="flex gap-2">
-               <input 
-                 type="number" 
-                 placeholder="Harga/Jam" 
-                 className="w-1/3 bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                 value={newTableCost}
-                 onChange={(e) => setNewTableCost(Number(e.target.value))}
-               />
-               <div className="flex-1 grid grid-cols-3 gap-2">
-                 <input
-                   type="text"
-                   placeholder="Link ON (Optional)"
-                   className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                   value={newTableRemoteOn}
-                   onChange={(e) => setNewTableRemoteOn(e.target.value)}
-                 />
-                 <input
-                   type="text"
-                   placeholder="Link OFF (Optional)"
-                   className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                   value={newTableRemoteOff}
-                   onChange={(e) => setNewTableRemoteOff(e.target.value)}
-                 />
-                 <input
-                   type="text"
-                   placeholder="Link TOGGLE (Optional)"
-                   className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                   value={newTableRemoteToggle}
-                   onChange={(e) => setNewTableRemoteToggle(e.target.value)}
-                 />
-               </div>
+            <input 
+              type="number" 
+              placeholder="Harga/Jam" 
+              className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+              value={newTableCost}
+              onChange={(e) => setNewTableCost(Number(e.target.value))}
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="text"
+                placeholder="Link ON (Arduino)"
+                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                value={newTableRemoteOn}
+                onChange={(e) => setNewTableRemoteOn(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Link OFF (Arduino)"
+                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                value={newTableRemoteOff}
+                onChange={(e) => setNewTableRemoteOff(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Link TOGGLE (Arduino)"
+                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                value={newTableRemoteToggle}
+                onChange={(e) => setNewTableRemoteToggle(e.target.value)}
+              />
             </div>
             <button 
               onClick={handleAddTable}
