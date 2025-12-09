@@ -72,14 +72,19 @@ import { User, Product, Table, Transaction, CartItem, Variant, Ingredient, Recip
 import { BluetoothPrinter } from './components/BluetoothPrinter';
 
 // --- Lamp control helpers ---
-// Map table number to toggle URL (4 meja)
-const TABLE_LAMP_URL = (num: number) => `http://192.168.100.120/led?num=${num}&state=TOGGLE`;
+const LAMP_BASE_URL = 'http://192.168.100.120/led';
 
-// Toggle lamp with a fetch that respects CORS and has a timeout
-async function toggleLamp(num: number, timeout = 5000): Promise<{ ok: boolean; status?: number; text?: string; error?: string }> {
+function TABLE_LAMP_URL(num: number, action: 'on' | 'off' | 'toggle' = 'toggle', durationSec?: number) {
+  let u = `${LAMP_BASE_URL}?num=${num}&action=${action}`;
+  if (durationSec && durationSec > 0) u += `&duration=${durationSec}`;
+  return u;
+}
+
+// Control lamp with action: 'on' | 'off' | 'toggle', optionally with duration (seconds)
+async function controlLamp(num: number, action: 'on' | 'off' | 'toggle' = 'toggle', durationSec?: number, timeout = 5000): Promise<{ ok: boolean; status?: number; text?: string; error?: string }> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
-  const url = TABLE_LAMP_URL(num);
+  const url = TABLE_LAMP_URL(num, action, durationSec);
   try {
     const res = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store', signal: controller.signal });
     clearTimeout(id);
@@ -184,20 +189,22 @@ const App: React.FC = () => {
     const unsubTables = onSnapshot(query(collection(db, `stores/${storeId}/tables`), orderBy('name')), (snap) => {
       const latest = snap.docs.map(d => ({ id: d.id, ...d.data() } as Table));
 
-      // Compare previous table statuses and toggle lamps on changes
+      // Compare previous table statuses and control lamps on changes
       for (let i = 0; i < latest.length; i++) {
         const t = latest[i];
         const p = prevTables.find(x => x.id === t.id);
         const num = deriveTableNumber(t.name, i);
         if (!p) {
           if (t.status === 'occupied') {
-            toggleLamp(num).catch(e => console.warn('toggleLamp error', e));
+            const dur = t.endTime ? Math.max(0, Math.ceil((t.endTime - Date.now()) / 1000)) : undefined;
+            controlLamp(num, 'on', dur).catch(e => console.warn('controlLamp error', e));
           }
         } else if (p.status !== t.status) {
           if (p.status !== 'occupied' && t.status === 'occupied') {
-            toggleLamp(num).catch(e => console.warn('toggleLamp error', e));
+            const dur = t.endTime ? Math.max(0, Math.ceil((t.endTime - Date.now()) / 1000)) : undefined;
+            controlLamp(num, 'on', dur).catch(e => console.warn('controlLamp error', e));
           } else if (p.status === 'occupied' && t.status !== 'occupied') {
-            toggleLamp(num).catch(e => console.warn('toggleLamp error', e));
+            controlLamp(num, 'off').catch(e => console.warn('controlLamp error', e));
           }
         }
       }
@@ -1262,9 +1269,9 @@ const StopTableModal: React.FC<{ storeId: string, table: Table, onClose: () => v
       try {
         const idx = tables.findIndex(t => t.id === table.id);
         const num = deriveTableNumber(table.name, idx >= 0 ? idx : 0);
-        await toggleLamp(num);
+        await controlLamp(num, 'off');
       } catch (e) {
-        console.warn('Failed to toggle lamp on stop', e);
+        console.warn('Failed to control lamp on stop', e);
       }
       
       onClose();
@@ -1409,13 +1416,15 @@ const MoveTableModal: React.FC<{ storeId: string, fromTable: Table, tables: Tabl
            const fromIdx = tables.findIndex(t => t.id === fromTable.id);
            const toIdx = tables.findIndex(t => t.id === toTableId);
            const fromNum = deriveTableNumber(fromTable.name, fromIdx >= 0 ? fromIdx : 0);
-           const toNum = deriveTableNumber(tables.find(t=>t.id===toTableId)?.name, toIdx >= 0 ? toIdx : 0);
-           // If from was occupied, toggle it (attempt to turn off)
-           await toggleLamp(fromNum).catch(e => console.warn('toggle from error', e));
-           // Toggle destination to turn on
-           await toggleLamp(toNum).catch(e => console.warn('toggle to error', e));
+           const toName = tables.find(t => t.id === toTableId)?.name;
+           const toNum = deriveTableNumber(toName, toIdx >= 0 ? toIdx : 0);
+           // If from was occupied, turn it off
+           await controlLamp(fromNum, 'off').catch(e => console.warn('control from error', e));
+           // Turn on destination with duration equal to moveData.endTime - now
+           const dur = moveData.endTime ? Math.max(0, Math.ceil((moveData.endTime - Date.now()) / 1000)) : undefined;
+           await controlLamp(toNum, 'on', dur).catch(e => console.warn('control to error', e));
          } catch (e) {
-           console.warn('Lamp toggle during move failed', e);
+           console.warn('Lamp control during move failed', e);
          }
 
          onClose();
@@ -2625,35 +2634,30 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ storeId, cart, currentUse
 
       await Promise.all(batchPromises);
 
-      // After DB updates, toggle lamp(s) for newly occupied tables
+      // After DB updates, command device to turn ON lamps for occupied tables (with duration)
       try {
-        const lampTableNums: number[] = [];
-        for (const item of cart) {
-          if (item.itemType === 'table' && item.tableId) {
-            const tableIndex = tables.findIndex(t => t.id === item.tableId);
-            // If we can derive a table number (index+1) and it's not a topup, toggle
-            const table = tables[tableIndex];
-            const isTopup = table?.status === 'occupied';
-            if (table && !isTopup) {
-              const num = tableIndex >= 0 ? tableIndex + 1 : undefined;
-              if (num) lampTableNums.push(num);
+        const tableIds = Array.from(new Set(cart.filter(i => i.itemType === 'table' && i.tableId).map(i => (i as CartItem).tableId as string)));
+        const promises = tableIds.map(async (tid) => {
+          try {
+            const tableDoc = await getDoc(doc(db, `stores/${storeId}/tables`, tid));
+            if (!tableDoc.exists()) return;
+            const tdata = tableDoc.data() as Table;
+            if (tdata.status === 'occupied') {
+              const num = deriveTableNumber(tdata.name, tables.findIndex(x => x.id === tid));
+              const dur = tdata.endTime ? Math.max(0, Math.ceil((tdata.endTime - Date.now()) / 1000)) : undefined;
+              return controlLamp(num, 'on', dur);
             }
+          } catch (e) {
+            console.warn('Failed to command lamp for table', tid, e);
           }
-        }
-
-        if (lampTableNums.length > 0) {
-          const uniqueNums = Array.from(new Set(lampTableNums));
-          // Fire toggles in parallel, but don't block the success flow
-          Promise.allSettled(uniqueNums.map(n => toggleLamp(n))).then(results => {
-            const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !(r as any).value?.ok));
-            if (failed.length > 0) {
-              console.warn('Some lamp toggles failed', failed);
-            }
-          });
-        }
-
+        });
+        // Fire-and-forget: don't block user flow, but log failures
+        Promise.allSettled(promises).then(results => {
+          const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !(r as any).value?.ok));
+          if (failed.length > 0) console.warn('Some lamp commands failed', failed);
+        });
       } catch (err) {
-        console.error('Lamp toggle error', err);
+        console.error('Lamp control error', err);
       }
 
       alert(`Pembayaran Berhasil!\nKembalian: Rp ${change.toLocaleString()}`);
