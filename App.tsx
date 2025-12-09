@@ -1,4 +1,3 @@
-// Zyra POS - Billiard & Cafe Management System
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
@@ -689,7 +688,7 @@ const App: React.FC = () => {
               <>
                 <div className="my-2 border-t border-slate-800 mx-2" />
                 <SidebarItem icon={<Package size={24} />} label="Inventory" active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} badge={totalAlerts > 0 ? totalAlerts : undefined} />
-                <SidebarItem icon={<Settings size={24} />} label="Explore" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+                <SidebarItem icon={<Settings size={24} />} label="Setting" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
               </>
             )}
           </nav>
@@ -1670,62 +1669,44 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
       <div className="space-y-6">
         {/* Add New */}
         <div className="bg-slate-900 p-4 rounded border border-slate-700">
-          <h4 className="font-bold mb-3 text-sm text-slate-300">Tambah Meja Baru</h4>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Nama Meja</label>
-              <input 
-                type="text" 
-                placeholder="e.g. Meja 1" 
-                className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                value={newTableName}
-                onChange={(e) => setNewTableName(e.target.value)}
+          <h4 className="font-bold mb-2 text-sm text-slate-300">Tambah Meja Baru</h4>
+          <div className="space-y-2">
+            <input 
+              type="text" 
+              placeholder="Nama Meja (e.g. Meja VIP)" 
+              className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+              value={newTableName}
+              onChange={(e) => setNewTableName(e.target.value)}
+            />
+            <input 
+              type="number" 
+              placeholder="Harga/Jam" 
+              className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+              value={newTableCost}
+              onChange={(e) => setNewTableCost(Number(e.target.value))}
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="text"
+                placeholder="Link ON (Arduino)"
+                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                value={newTableRemoteOn}
+                onChange={(e) => setNewTableRemoteOn(e.target.value)}
               />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Harga/Jam (Rp)</label>
-              <input 
-                type="number" 
-                placeholder="20000" 
-                className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                value={newTableCost}
-                onChange={(e) => setNewTableCost(Number(e.target.value))}
+              <input
+                type="text"
+                placeholder="Link OFF (Arduino)"
+                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                value={newTableRemoteOff}
+                onChange={(e) => setNewTableRemoteOff(e.target.value)}
               />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-2 block">Link Arduino (Optional)</label>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="text-[10px] text-slate-500 block mb-1">Link ON</label>
-                  <input
-                    type="text"
-                    placeholder="http://..."
-                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-xs"
-                    value={newTableRemoteOn}
-                    onChange={(e) => setNewTableRemoteOn(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500 block mb-1">Link OFF</label>
-                  <input
-                    type="text"
-                    placeholder="http://..."
-                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-xs"
-                    value={newTableRemoteOff}
-                    onChange={(e) => setNewTableRemoteOff(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500 block mb-1">Link TOGGLE</label>
-                  <input
-                    type="text"
-                    placeholder="http://..."
-                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-xs"
-                    value={newTableRemoteToggle}
-                    onChange={(e) => setNewTableRemoteToggle(e.target.value)}
-                  />
-                </div>
-              </div>
+              <input
+                type="text"
+                placeholder="Link TOGGLE (Arduino)"
+                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                value={newTableRemoteToggle}
+                onChange={(e) => setNewTableRemoteToggle(e.target.value)}
+              />
             </div>
             <button 
               onClick={handleAddTable}
@@ -2528,8 +2509,6 @@ const TransactionHistoryScreen: React.FC<{ transactions: Transaction[] }> = ({ t
 
 // --- Settings Screen (Admin Only) ---
 const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Operator[] }> = ({ storeId, users, operators }) => {
-    if (!storeId) return <div className="p-6 text-center text-red-400 bg-red-900/20 rounded">Store ID tidak ditemukan. Silakan login ulang.</div>;
-    
   const [newOpName, setNewOpName] = useState('');
   const [opToDelete, setOpToDelete] = useState<Operator | null>(null);
 
@@ -2596,14 +2575,8 @@ const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Oper
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-        <Settings className="text-slate-400" /> Pengaturan Toko
+        <Settings className="text-slate-400" /> Pengaturan
       </h2>
-      
-      {!users || users.length === 0 ? (
-        <div className="bg-yellow-900/30 border border-yellow-600 p-4 rounded text-yellow-300 text-sm">
-          ⚠️ Sedang memuat data user... mohon tunggu sebentar
-        </div>
-      ) : null}
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -2678,23 +2651,19 @@ const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Oper
         <div className="bg-secondary p-6 rounded-xl border border-slate-700 h-fit">
           <h3 className="font-bold mb-4 flex items-center gap-2"><Users size={20} /> Akun Login</h3>
           <div className="space-y-3">
-            {users && Array.isArray(users) && users.length > 0 ? (
-              users.map(u => (
-                <div key={u.id} className="flex justify-between items-center bg-slate-800 p-3 rounded">
-                  <div>
-                    <p className="font-bold text-white">{u.name}</p>
-                    <p className="text-xs text-slate-400 capitalize">{u.role}</p>
-                    <div className="font-mono bg-slate-900 px-2 py-1 rounded text-xs text-slate-500">PIN: {u.pin}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setEditUser(u)} className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs">Edit</button>
-                    <button onClick={() => setDeleteUser(u)} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">Hapus</button>
-                  </div>
+            {users.map(u => (
+              <div key={u.id} className="flex justify-between items-center bg-slate-800 p-3 rounded">
+                <div>
+                  <p className="font-bold text-white">{u.name}</p>
+                  <p className="text-xs text-slate-400 capitalize">{u.role}</p>
+                  <div className="font-mono bg-slate-900 px-2 py-1 rounded text-xs text-slate-500">PIN: {u.pin}</div>
                 </div>
-              ))
-            ) : (
-              <p className="text-slate-400 text-sm">Tidak ada akun login tersedia.</p>
-            )}
+                <div className="flex gap-2">
+                  <button onClick={() => setEditUser(u)} className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs">Edit</button>
+                  <button onClick={() => setDeleteUser(u)} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">Hapus</button>
+                </div>
+              </div>
+            ))}
           </div>
           <div className="mt-4 border-t border-slate-700 pt-4">
             <h4 className="font-bold mb-2 text-sm">Tambah Akun Login</h4>
