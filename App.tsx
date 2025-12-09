@@ -1258,6 +1258,14 @@ const StopTableModal: React.FC<{ storeId: string, table: Table, onClose: () => v
         currentCustomer: '', 
         duration: 0
       }, { merge: true });
+      // Toggle lamp off for this table (best-effort)
+      try {
+        const idx = tables.findIndex(t => t.id === table.id);
+        const num = deriveTableNumber(table.name, idx >= 0 ? idx : 0);
+        await toggleLamp(num);
+      } catch (e) {
+        console.warn('Failed to toggle lamp on stop', e);
+      }
       
       onClose();
     } catch (e: any) {
@@ -1396,7 +1404,20 @@ const MoveTableModal: React.FC<{ storeId: string, fromTable: Table, tables: Tabl
             duration: 0
          }, { merge: true });
 
-         // alert("Berhasil pindah meja!"); // Optional feedback
+         // Try toggling lamps: turn off origin, turn on destination (best-effort)
+         try {
+           const fromIdx = tables.findIndex(t => t.id === fromTable.id);
+           const toIdx = tables.findIndex(t => t.id === toTableId);
+           const fromNum = deriveTableNumber(fromTable.name, fromIdx >= 0 ? fromIdx : 0);
+           const toNum = deriveTableNumber(tables.find(t=>t.id===toTableId)?.name, toIdx >= 0 ? toIdx : 0);
+           // If from was occupied, toggle it (attempt to turn off)
+           await toggleLamp(fromNum).catch(e => console.warn('toggle from error', e));
+           // Toggle destination to turn on
+           await toggleLamp(toNum).catch(e => console.warn('toggle to error', e));
+         } catch (e) {
+           console.warn('Lamp toggle during move failed', e);
+         }
+
          onClose();
       } catch (e: any) {
          console.error(e);
