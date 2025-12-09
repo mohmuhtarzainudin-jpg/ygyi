@@ -1669,44 +1669,62 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
       <div className="space-y-6">
         {/* Add New */}
         <div className="bg-slate-900 p-4 rounded border border-slate-700">
-          <h4 className="font-bold mb-2 text-sm text-slate-300">Tambah Meja Baru</h4>
-          <div className="space-y-2">
-            <input 
-              type="text" 
-              placeholder="Nama Meja (e.g. Meja VIP)" 
-              className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-              value={newTableName}
-              onChange={(e) => setNewTableName(e.target.value)}
-            />
-            <input 
-              type="number" 
-              placeholder="Harga/Jam" 
-              className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-              value={newTableCost}
-              onChange={(e) => setNewTableCost(Number(e.target.value))}
-            />
-            <div className="grid grid-cols-3 gap-2">
-              <input
-                type="text"
-                placeholder="Link ON (Arduino)"
-                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                value={newTableRemoteOn}
-                onChange={(e) => setNewTableRemoteOn(e.target.value)}
+          <h4 className="font-bold mb-3 text-sm text-slate-300">Tambah Meja Baru</h4>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Nama Meja</label>
+              <input 
+                type="text" 
+                placeholder="e.g. Meja 1" 
+                className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                value={newTableName}
+                onChange={(e) => setNewTableName(e.target.value)}
               />
-              <input
-                type="text"
-                placeholder="Link OFF (Arduino)"
-                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                value={newTableRemoteOff}
-                onChange={(e) => setNewTableRemoteOff(e.target.value)}
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Harga/Jam (Rp)</label>
+              <input 
+                type="number" 
+                placeholder="20000" 
+                className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                value={newTableCost}
+                onChange={(e) => setNewTableCost(Number(e.target.value))}
               />
-              <input
-                type="text"
-                placeholder="Link TOGGLE (Arduino)"
-                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                value={newTableRemoteToggle}
-                onChange={(e) => setNewTableRemoteToggle(e.target.value)}
-              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-2 block">Link Arduino (Optional)</label>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-1">Link ON</label>
+                  <input
+                    type="text"
+                    placeholder="http://..."
+                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-xs"
+                    value={newTableRemoteOn}
+                    onChange={(e) => setNewTableRemoteOn(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-1">Link OFF</label>
+                  <input
+                    type="text"
+                    placeholder="http://..."
+                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-xs"
+                    value={newTableRemoteOff}
+                    onChange={(e) => setNewTableRemoteOff(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-1">Link TOGGLE</label>
+                  <input
+                    type="text"
+                    placeholder="http://..."
+                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-xs"
+                    value={newTableRemoteToggle}
+                    onChange={(e) => setNewTableRemoteToggle(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
             <button 
               onClick={handleAddTable}
