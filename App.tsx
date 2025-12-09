@@ -71,76 +71,6 @@ import {
 import { User, Product, Table, Transaction, CartItem, Variant, Ingredient, RecipeItem, Shift, Operator, StoreSettings } from './types';
 import { BluetoothPrinter } from './components/BluetoothPrinter';
 
-// --- Lamp control helpers ---
-const LAMP_BASE_URL = 'http://192.168.100.120/led';
-
-function TABLE_LAMP_URL(num: number, action: 'on' | 'off' | 'toggle' = 'toggle', durationSec?: number) {
-  let u = `${LAMP_BASE_URL}?num=${num}&action=${action}`;
-  if (durationSec && durationSec > 0) u += `&duration=${durationSec}`;
-  return u;
-}
-
-// Control lamp with action: 'on' | 'off' | 'toggle', optionally with duration (seconds)
-async function controlLamp(num: number, action: 'on' | 'off' | 'toggle' = 'toggle', durationSec?: number, timeout = 5000): Promise<{ ok: boolean; status?: number; text?: string; error?: string }> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  const url = TABLE_LAMP_URL(num, action, durationSec);
-  try {
-    const res = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store', signal: controller.signal });
-    clearTimeout(id);
-    const text = await res.text().catch(() => undefined);
-    return { ok: res.ok, status: res.status, text };
-  } catch (err: any) {
-    clearTimeout(id);
-    return { ok: false, error: err.name === 'AbortError' ? 'timeout' : String(err) };
-  }
-}
-
-// Use table-specific URLs if provided, else fallback to controlLamp using numeric endpoint
-async function controlLampForTable(table: Table, action: 'on' | 'off' | 'toggle' = 'toggle', durationSec?: number) {
-  try {
-    // prefer explicit URLs configured per table
-    let url: string | undefined;
-    if (action === 'on' && table.remoteOn) url = table.remoteOn;
-    else if (action === 'off' && table.remoteOff) url = table.remoteOff;
-    else if (action === 'toggle' && table.remoteToggle) url = table.remoteToggle;
-
-    if (url) {
-      if (durationSec && durationSec > 0) {
-        // append duration param if not present
-        url += (url.includes('?') ? '&' : '?') + `duration=${durationSec}`;
-      }
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 5000);
-      try {
-        const res = await fetch(url, { method: 'GET', mode: 'cors', signal: controller.signal });
-        clearTimeout(id);
-        const text = await res.text().catch(() => undefined);
-        return { ok: res.ok, status: res.status, text };
-      } catch (err: any) {
-        clearTimeout(id);
-        return { ok: false, error: err.name === 'AbortError' ? 'timeout' : String(err) };
-      }
-    }
-
-    // fallback: derive number and use default endpoint
-    // try to infer number from name or tables ordering (best-effort)
-    // Caller may pass table with name and rely on deriveTableNumber elsewhere
-    const inferredNum = deriveTableNumber(table.name, 0);
-    return controlLamp(inferredNum, action, durationSec);
-  } catch (e: any) {
-    return { ok: false, error: String(e) };
-  }
-}
-
-// Derive table number from table name (e.g. "Meja 1") or fallback to index+1
-function deriveTableNumber(tableName: string | undefined, index: number) {
-  if (!tableName) return index + 1;
-  const m = tableName.match(/(\d+)/);
-  if (m) return Number(m[1]);
-  return index + 1;
-}
-
 // --- Types & Constants ---
 const STORE_KEY = 'zyra_store_id';
 const SHIFT_KEY = 'zyra_active_shift';
@@ -167,97 +97,9 @@ const Modal: React.FC<ModalProps> = ({ children, onClose, title }) => (
   </div>
 );
 
-// Simple Error Boundary to avoid full blank screen when modal render fails
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: any }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: any, info: any) {
-    console.error('ErrorBoundary caught', error, info);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <Modal title="Error" onClose={() => { this.setState({ hasError: false, error: undefined }); }}>
-          <div className="p-4">
-            <p className="text-red-400">Terjadi kesalahan saat membuka modal. Cek console untuk detil.</p>
-            <pre className="text-xs mt-2 text-slate-300">{String(this.state.error)}</pre>
-          </div>
-        </Modal>
-      );
-    }
-    return this.props.children as React.ReactElement;
-  }
-}
-
 // --- Main App Component ---
 
 const App: React.FC = () => {
-    // User Management State
-    const [newUserName, setNewUserName] = useState('');
-    const [newUserPin, setNewUserPin] = useState('');
-    const [newUserRole, setNewUserRole] = useState<Role>('cashier');
-    const [editUser, setEditUser] = useState<User | null>(null);
-    const [editUserName, setEditUserName] = useState('');
-    const [editUserPin, setEditUserPin] = useState('');
-    const [editUserRole, setEditUserRole] = useState<Role>('cashier');
-    const [deleteUser, setDeleteUser] = useState<User | null>(null);
-
-    useEffect(() => {
-      if (editUser) {
-        setEditUserName(editUser.name);
-        setEditUserPin(editUser.pin);
-        setEditUserRole(editUser.role);
-      }
-    }, [editUser]);
-
-    const handleAddUser = async () => {
-      if (!newUserName || !newUserPin) return alert('Nama dan PIN wajib diisi');
-      try {
-        const id = `user-${Date.now()}`;
-        await setDoc(doc(db, `stores/${storeId}/users`, id), {
-          name: newUserName,
-          pin: newUserPin,
-          role: newUserRole
-        });
-        setNewUserName('');
-        setNewUserPin('');
-        setNewUserRole('cashier');
-      } catch (e) {
-        console.error(e);
-        alert('Gagal menambah akun');
-      }
-    };
-
-    const handleEditUser = async () => {
-      if (!editUser || !editUserName || !editUserPin) return alert('Nama dan PIN wajib diisi');
-      try {
-        await setDoc(doc(db, `stores/${storeId}/users`, editUser.id), {
-          name: editUserName,
-          pin: editUserPin,
-          role: editUserRole
-        });
-        setEditUser(null);
-      } catch (e) {
-        console.error(e);
-        alert('Gagal edit akun');
-      }
-    };
-
-    const handleDeleteUser = async () => {
-      if (!deleteUser) return;
-      try {
-        await deleteDoc(doc(db, `stores/${storeId}/users`, deleteUser.id));
-        setDeleteUser(null);
-      } catch (e) {
-        console.error(e);
-        alert('Gagal hapus akun');
-      }
-    };
   const [storeId, setStoreId] = useState<string | null>(localStorage.getItem(STORE_KEY));
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'billiard' | 'cafe' | 'inventory' | 'settings' | 'history'>('dashboard');
@@ -310,32 +152,8 @@ const App: React.FC = () => {
       setIngredients(snap.docs.map(d => ({ id: d.id, ...d.data() } as Ingredient)));
     }, handleSnapshotError);
 
-    let prevTables: Table[] = [];
     const unsubTables = onSnapshot(query(collection(db, `stores/${storeId}/tables`), orderBy('name')), (snap) => {
-      const latest = snap.docs.map(d => ({ id: d.id, ...d.data() } as Table));
-
-      // Compare previous table statuses and control lamps on changes
-      for (let i = 0; i < latest.length; i++) {
-        const t = latest[i];
-        const p = prevTables.find(x => x.id === t.id);
-        const num = deriveTableNumber(t.name, i);
-        if (!p) {
-          if (t.status === 'occupied') {
-            const dur = t.endTime ? Math.max(0, Math.ceil((t.endTime - Date.now()) / 1000)) : undefined;
-            controlLamp(num, 'on', dur).catch(e => console.warn('controlLamp error', e));
-          }
-        } else if (p.status !== t.status) {
-          if (p.status !== 'occupied' && t.status === 'occupied') {
-            const dur = t.endTime ? Math.max(0, Math.ceil((t.endTime - Date.now()) / 1000)) : undefined;
-            controlLamp(num, 'on', dur).catch(e => console.warn('controlLamp error', e));
-          } else if (p.status === 'occupied' && t.status !== 'occupied') {
-            controlLamp(num, 'off').catch(e => console.warn('controlLamp error', e));
-          }
-        }
-      }
-
-      prevTables = latest;
-      setTables(latest);
+      setTables(snap.docs.map(d => ({ id: d.id, ...d.data() } as Table)));
     }, handleSnapshotError);
 
     const unsubUsers = onSnapshot(collection(db, `stores/${storeId}/users`), (snap) => {
@@ -366,32 +184,6 @@ const App: React.FC = () => {
       unsubOperators();
     };
   }, [storeId]);
-
-  // Auto-stop tables when their endTime passes (runs locally where this app is active).
-  // Warning: This will update Firestore to set table status to 'available' when timer expires.
-  useEffect(() => {
-    if (!storeId) return;
-    const iv = setInterval(() => {
-      const now = Date.now();
-      tables.forEach(async (t) => {
-        try {
-          if (t.status === 'occupied' && t.endTime && now >= t.endTime) {
-            // Mark table as available and clear timing fields
-            await updateDoc(doc(db, `stores/${storeId}/tables`, t.id), {
-              status: 'available',
-              startTime: deleteField(),
-              endTime: deleteField(),
-              duration: 0,
-              currentCustomer: deleteField()
-            });
-          }
-        } catch (e) {
-          console.warn('Auto-stop table failed', e);
-        }
-      });
-    }, 15 * 1000); // check every 15s
-    return () => clearInterval(iv);
-  }, [tables, storeId]);
 
   // --- Handlers ---
 
@@ -769,11 +561,6 @@ const App: React.FC = () => {
           {activeTab === 'history' && <TransactionHistoryScreen transactions={transactions} />}
           {activeTab === 'inventory' && currentUser.role === 'admin' && <InventoryScreen storeId={storeId!} products={products} ingredients={ingredients} />}
           {activeTab === 'settings' && currentUser.role === 'admin' && <SettingsScreen storeId={storeId!} users={users} operators={operators} />}
-                {activeTab === 'settings' && currentUser.role === 'admin' && (
-                  <ErrorBoundary>
-                    <SettingsScreen storeId={storeId!} users={users} operators={operators} />
-                  </ErrorBoundary>
-                )}
         </div>
       </main>
 
@@ -1267,13 +1054,11 @@ const BilliardScreen: React.FC<BilliardScreenProps> = ({ storeId, tables, onAddT
       )}
 
       {manageTableMode && (
-        <ErrorBoundary>
-          <TableManagementModal 
-            storeId={storeId} 
-            tables={tables} 
-            onClose={() => setManageTableMode(false)} 
-          />
-        </ErrorBoundary>
+        <TableManagementModal 
+          storeId={storeId} 
+          tables={tables} 
+          onClose={() => setManageTableMode(false)} 
+        />
       )}
 
       {isMovingTable && (
@@ -1369,23 +1154,13 @@ const TableCard: React.FC<TableCardProps> = ({ table, onStart, onStop, onTopup, 
         )}
       </div>
       
-      <div className="absolute top-2 right-12 flex gap-2">
-        {table.remoteOn && (
-          <a href={table.remoteOn} target="_blank" rel="noreferrer" className="text-emerald-400 hover:text-white" title="Lampu ON">
-            <Power size={14} />
-          </a>
-        )}
-        {table.remoteOff && (
-          <a href={table.remoteOff} target="_blank" rel="noreferrer" className="text-red-400 hover:text-white" title="Lampu OFF">
-            <Power size={14} />
-          </a>
-        )}
-        {table.remoteToggle && (
-          <a href={table.remoteToggle} target="_blank" rel="noreferrer" className="text-slate-600 hover:text-white" title="Lampu TOGGLE">
-            <ExternalLink size={14} />
-          </a>
-        )}
-      </div>
+      {table.remoteUrl && (
+         <div className="absolute top-2 right-12">
+            <a href={table.remoteUrl} target="_blank" rel="noreferrer" className="text-slate-600 hover:text-white" title="Kontrol Lampu">
+              <ExternalLink size={14} />
+            </a>
+         </div>
+      )}
     </div>
   );
 };
@@ -1407,14 +1182,6 @@ const StopTableModal: React.FC<{ storeId: string, table: Table, onClose: () => v
         currentCustomer: '', 
         duration: 0
       }, { merge: true });
-      // Toggle lamp off for this table (best-effort)
-      try {
-        const idx = tables.findIndex(t => t.id === table.id);
-        const num = deriveTableNumber(table.name, idx >= 0 ? idx : 0);
-        await controlLamp(num, 'off');
-      } catch (e) {
-        console.warn('Failed to control lamp on stop', e);
-      }
       
       onClose();
     } catch (e: any) {
@@ -1553,22 +1320,7 @@ const MoveTableModal: React.FC<{ storeId: string, fromTable: Table, tables: Tabl
             duration: 0
          }, { merge: true });
 
-         // Try toggling lamps: turn off origin, turn on destination (best-effort)
-         try {
-           const fromIdx = tables.findIndex(t => t.id === fromTable.id);
-           const toIdx = tables.findIndex(t => t.id === toTableId);
-           const fromNum = deriveTableNumber(fromTable.name, fromIdx >= 0 ? fromIdx : 0);
-           const toName = tables.find(t => t.id === toTableId)?.name;
-           const toNum = deriveTableNumber(toName, toIdx >= 0 ? toIdx : 0);
-           // If from was occupied, turn it off
-           await controlLamp(fromNum, 'off').catch(e => console.warn('control from error', e));
-           // Turn on destination with duration equal to moveData.endTime - now
-           const dur = moveData.endTime ? Math.max(0, Math.ceil((moveData.endTime - Date.now()) / 1000)) : undefined;
-           await controlLamp(toNum, 'on', dur).catch(e => console.warn('control to error', e));
-         } catch (e) {
-           console.warn('Lamp control during move failed', e);
-         }
-
+         // alert("Berhasil pindah meja!"); // Optional feedback
          onClose();
       } catch (e: any) {
          console.error(e);
@@ -1614,9 +1366,7 @@ const MoveTableModal: React.FC<{ storeId: string, fromTable: Table, tables: Tabl
 const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose: () => void }> = ({ storeId, tables, onClose }) => {
   const [newTableName, setNewTableName] = useState('');
   const [newTableCost, setNewTableCost] = useState(20000);
-  const [newTableRemoteOn, setNewTableRemoteOn] = useState('');
-  const [newTableRemoteOff, setNewTableRemoteOff] = useState('');
-  const [newTableRemoteToggle, setNewTableRemoteToggle] = useState('');
+  const [newTableRemote, setNewTableRemote] = useState('');
 
   const handleAddTable = async () => {
     if (!newTableName) return;
@@ -1626,14 +1376,10 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
         name: newTableName,
         status: 'available',
         costPerHour: Number(newTableCost),
-        remoteOn: newTableRemoteOn || '',
-        remoteOff: newTableRemoteOff || '',
-        remoteToggle: newTableRemoteToggle || ''
+        remoteUrl: newTableRemote
       });
       setNewTableName('');
-      setNewTableRemoteOn('');
-      setNewTableRemoteOff('');
-      setNewTableRemoteToggle('');
+      setNewTableRemote('');
     } catch (e) {
       console.error(e);
       alert("Gagal menambah meja");
@@ -1656,11 +1402,9 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
      } catch (e) { console.error(e); }
   };
 
-  const handleUpdateRemoteField = async (id: string, field: 'remoteOn' | 'remoteOff' | 'remoteToggle', url: string) => {
+  const handleUpdateRemote = async (id: string, url: string) => {
      try {
-       const updateObj: any = {};
-       updateObj[field] = url;
-       await updateDoc(doc(db, `stores/${storeId}/tables`, id), updateObj);
+       await updateDoc(doc(db, `stores/${storeId}/tables`, id), { remoteUrl: url });
      } catch (e) { console.error(e); }
   };
 
@@ -1678,35 +1422,21 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
               value={newTableName}
               onChange={(e) => setNewTableName(e.target.value)}
             />
-            <input 
-              type="number" 
-              placeholder="Harga/Jam" 
-              className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-              value={newTableCost}
-              onChange={(e) => setNewTableCost(Number(e.target.value))}
-            />
-            <div className="grid grid-cols-3 gap-2">
-              <input
-                type="text"
-                placeholder="Link ON (Arduino)"
-                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                value={newTableRemoteOn}
-                onChange={(e) => setNewTableRemoteOn(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Link OFF (Arduino)"
-                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                value={newTableRemoteOff}
-                onChange={(e) => setNewTableRemoteOff(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Link TOGGLE (Arduino)"
-                className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                value={newTableRemoteToggle}
-                onChange={(e) => setNewTableRemoteToggle(e.target.value)}
-              />
+            <div className="flex gap-2">
+               <input 
+                 type="number" 
+                 placeholder="Harga/Jam" 
+                 className="w-1/3 bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                 value={newTableCost}
+                 onChange={(e) => setNewTableCost(Number(e.target.value))}
+               />
+               <input 
+                 type="text" 
+                 placeholder="Link Arduino (Optional)" 
+                 className="flex-1 bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                 value={newTableRemote}
+                 onChange={(e) => setNewTableRemote(e.target.value)}
+               />
             </div>
             <button 
               onClick={handleAddTable}
@@ -1729,41 +1459,25 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
                  </button>
                </div>
                <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-500">Harga/Jam</label>
-                        <input 
-                          type="number" 
-                          className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                          defaultValue={table.costPerHour}
-                          onBlur={(e) => handleUpdatePrice(table.id, Number(e.target.value))}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-500">Remote ON / OFF / TOGGLE (optional)</label>
-                        <div className="grid grid-cols-3 gap-2">
-                          <input
-                            type="text"
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                            defaultValue={table.remoteOn}
-                            placeholder="http://.../action=on"
-                            onBlur={(e) => handleUpdateRemoteField(table.id, 'remoteOn', e.target.value)}
-                          />
-                          <input
-                            type="text"
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                            defaultValue={table.remoteOff}
-                            placeholder="http://.../action=off"
-                            onBlur={(e) => handleUpdateRemoteField(table.id, 'remoteOff', e.target.value)}
-                          />
-                          <input
-                            type="text"
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                            defaultValue={table.remoteToggle}
-                            placeholder="http://.../action=toggle"
-                            onBlur={(e) => handleUpdateRemoteField(table.id, 'remoteToggle', e.target.value)}
-                          />
-                        </div>
-                      </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500">Harga/Jam</label>
+                    <input 
+                      type="number" 
+                      className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                      defaultValue={table.costPerHour}
+                      onBlur={(e) => handleUpdatePrice(table.id, Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500">Link Remote</label>
+                    <input 
+                      type="text" 
+                      className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                      defaultValue={table.remoteUrl}
+                      placeholder="http://..."
+                      onBlur={(e) => handleUpdateRemote(table.id, e.target.value)}
+                    />
+                  </div>
                </div>
              </div>
            ))}
@@ -2656,56 +2370,12 @@ const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Oper
                 <div>
                   <p className="font-bold text-white">{u.name}</p>
                   <p className="text-xs text-slate-400 capitalize">{u.role}</p>
-                  <div className="font-mono bg-slate-900 px-2 py-1 rounded text-xs text-slate-500">PIN: {u.pin}</div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setEditUser(u)} className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs">Edit</button>
-                  <button onClick={() => setDeleteUser(u)} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">Hapus</button>
-                </div>
+                <div className="font-mono bg-slate-900 px-2 py-1 rounded text-xs text-slate-500">PIN: {u.pin}</div>
               </div>
             ))}
           </div>
-          <div className="mt-4 border-t border-slate-700 pt-4">
-            <h4 className="font-bold mb-2 text-sm">Tambah Akun Login</h4>
-            <div className="flex flex-col gap-2">
-              <input type="text" className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" placeholder="Nama" value={newUserName} onChange={e => setNewUserName(e.target.value)} />
-              <input type="text" className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" placeholder="PIN" value={newUserPin} onChange={e => setNewUserPin(e.target.value)} />
-              <select className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" value={newUserRole} onChange={e => setNewUserRole(e.target.value as Role)}>
-                <option value="admin">Admin</option>
-                <option value="cashier">Kasir</option>
-              </select>
-              <button onClick={handleAddUser} className="bg-accent hover:bg-emerald-600 text-primary font-bold px-3 py-2 rounded">Tambah</button>
-            </div>
-          </div>
-          {/* Edit Modal */}
-          {editUser && (
-            <Modal title="Edit Akun Login" onClose={() => setEditUser(null)}>
-              <div className="space-y-3">
-                <input type="text" className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" placeholder="Nama" value={editUserName} onChange={e => setEditUserName(e.target.value)} />
-                <input type="text" className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" placeholder="PIN" value={editUserPin} onChange={e => setEditUserPin(e.target.value)} />
-                <select className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" value={editUserRole} onChange={e => setEditUserRole(e.target.value as Role)}>
-                  <option value="admin">Admin</option>
-                  <option value="cashier">Kasir</option>
-                </select>
-                <div className="flex gap-2 mt-2">
-                  <button onClick={() => setEditUser(null)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded">Batal</button>
-                  <button onClick={handleEditUser} className="flex-1 bg-accent hover:bg-emerald-600 text-primary py-2 rounded font-bold">Simpan</button>
-                </div>
-              </div>
-            </Modal>
-          )}
-          {/* Delete Modal */}
-          {deleteUser && (
-            <Modal title="Hapus Akun Login" onClose={() => setDeleteUser(null)}>
-              <div className="space-y-4">
-                <p className="text-slate-300">Anda yakin ingin menghapus akun <span className="text-white font-bold">{deleteUser.name}</span>?</p>
-                <div className="flex gap-2">
-                  <button onClick={() => setDeleteUser(null)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded">Batal</button>
-                  <button onClick={handleDeleteUser} className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded">Hapus</button>
-                </div>
-              </div>
-            </Modal>
-          )}
+          <p className="text-xs text-slate-500 mt-4">*Hubungi developer untuk tambah akun login</p>
         </div>
 
         {/* 3. Shift Operators */}
@@ -2857,33 +2527,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ storeId, cart, currentUse
       }
 
       await Promise.all(batchPromises);
-
-      // After DB updates, command device to turn ON lamps for occupied tables (with duration)
-      try {
-        const tableIds = Array.from(new Set(cart.filter(i => i.itemType === 'table' && i.tableId).map(i => (i as CartItem).tableId as string)));
-        const promises = tableIds.map(async (tid) => {
-          try {
-            const tableDoc = await getDoc(doc(db, `stores/${storeId}/tables`, tid));
-            if (!tableDoc.exists()) return;
-            const tdata = tableDoc.data() as Table;
-            if (tdata.status === 'occupied') {
-              const num = deriveTableNumber(tdata.name, tables.findIndex(x => x.id === tid));
-              const dur = tdata.endTime ? Math.max(0, Math.ceil((tdata.endTime - Date.now()) / 1000)) : undefined;
-              return controlLamp(num, 'on', dur);
-            }
-          } catch (e) {
-            console.warn('Failed to command lamp for table', tid, e);
-          }
-        });
-        // Fire-and-forget: don't block user flow, but log failures
-        Promise.allSettled(promises).then(results => {
-          const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !(r as any).value?.ok));
-          if (failed.length > 0) console.warn('Some lamp commands failed', failed);
-        });
-      } catch (err) {
-        console.error('Lamp control error', err);
-      }
-
       alert(`Pembayaran Berhasil!\nKembalian: Rp ${change.toLocaleString()}`);
       onSuccess();
 
