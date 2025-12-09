@@ -2596,8 +2596,14 @@ const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Oper
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-        <Settings className="text-slate-400" /> Pengaturan
+        <Settings className="text-slate-400" /> Pengaturan Toko
       </h2>
+      
+      {!users || users.length === 0 ? (
+        <div className="bg-yellow-900/30 border border-yellow-600 p-4 rounded text-yellow-300 text-sm">
+          ⚠️ Sedang memuat data user... mohon tunggu sebentar
+        </div>
+      ) : null}
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
