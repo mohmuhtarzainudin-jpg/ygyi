@@ -2509,6 +2509,9 @@ const TransactionHistoryScreen: React.FC<{ transactions: Transaction[] }> = ({ t
 
 // --- Settings Screen (Admin Only) ---
 const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Operator[] }> = ({ storeId, users, operators }) => {
+    if (!storeId) return <div className="p-6 text-red-400">Store ID tidak ditemukan. Silakan login ulang.</div>;
+    if (!users || !Array.isArray(users)) return <div className="p-6 text-red-400">Data user tidak tersedia.</div>;
+    if (!operators || !Array.isArray(operators)) return <div className="p-6 text-red-400">Data operator tidak tersedia.</div>;
   const [newOpName, setNewOpName] = useState('');
   const [opToDelete, setOpToDelete] = useState<Operator | null>(null);
 
