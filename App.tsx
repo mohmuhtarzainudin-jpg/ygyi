@@ -197,6 +197,67 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 // --- Main App Component ---
 
 const App: React.FC = () => {
+    // User Management State
+    const [newUserName, setNewUserName] = useState('');
+    const [newUserPin, setNewUserPin] = useState('');
+    const [newUserRole, setNewUserRole] = useState<Role>('cashier');
+    const [editUser, setEditUser] = useState<User | null>(null);
+    const [editUserName, setEditUserName] = useState('');
+    const [editUserPin, setEditUserPin] = useState('');
+    const [editUserRole, setEditUserRole] = useState<Role>('cashier');
+    const [deleteUser, setDeleteUser] = useState<User | null>(null);
+
+    useEffect(() => {
+      if (editUser) {
+        setEditUserName(editUser.name);
+        setEditUserPin(editUser.pin);
+        setEditUserRole(editUser.role);
+      }
+    }, [editUser]);
+
+    const handleAddUser = async () => {
+      if (!newUserName || !newUserPin) return alert('Nama dan PIN wajib diisi');
+      try {
+        const id = `user-${Date.now()}`;
+        await setDoc(doc(db, `stores/${storeId}/users`, id), {
+          name: newUserName,
+          pin: newUserPin,
+          role: newUserRole
+        });
+        setNewUserName('');
+        setNewUserPin('');
+        setNewUserRole('cashier');
+      } catch (e) {
+        console.error(e);
+        alert('Gagal menambah akun');
+      }
+    };
+
+    const handleEditUser = async () => {
+      if (!editUser || !editUserName || !editUserPin) return alert('Nama dan PIN wajib diisi');
+      try {
+        await setDoc(doc(db, `stores/${storeId}/users`, editUser.id), {
+          name: editUserName,
+          pin: editUserPin,
+          role: editUserRole
+        });
+        setEditUser(null);
+      } catch (e) {
+        console.error(e);
+        alert('Gagal edit akun');
+      }
+    };
+
+    const handleDeleteUser = async () => {
+      if (!deleteUser) return;
+      try {
+        await deleteDoc(doc(db, `stores/${storeId}/users`, deleteUser.id));
+        setDeleteUser(null);
+      } catch (e) {
+        console.error(e);
+        alert('Gagal hapus akun');
+      }
+    };
   const [storeId, setStoreId] = useState<string | null>(localStorage.getItem(STORE_KEY));
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'billiard' | 'cafe' | 'inventory' | 'settings' | 'history'>('dashboard');
@@ -2592,12 +2653,56 @@ const SettingsScreen: React.FC<{ storeId: string, users: User[], operators: Oper
                 <div>
                   <p className="font-bold text-white">{u.name}</p>
                   <p className="text-xs text-slate-400 capitalize">{u.role}</p>
+                  <div className="font-mono bg-slate-900 px-2 py-1 rounded text-xs text-slate-500">PIN: {u.pin}</div>
                 </div>
-                <div className="font-mono bg-slate-900 px-2 py-1 rounded text-xs text-slate-500">PIN: {u.pin}</div>
+                <div className="flex gap-2">
+                  <button onClick={() => setEditUser(u)} className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs">Edit</button>
+                  <button onClick={() => setDeleteUser(u)} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">Hapus</button>
+                </div>
               </div>
             ))}
           </div>
-          <p className="text-xs text-slate-500 mt-4">*Hubungi developer untuk tambah akun login</p>
+          <div className="mt-4 border-t border-slate-700 pt-4">
+            <h4 className="font-bold mb-2 text-sm">Tambah Akun Login</h4>
+            <div className="flex flex-col gap-2">
+              <input type="text" className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" placeholder="Nama" value={newUserName} onChange={e => setNewUserName(e.target.value)} />
+              <input type="text" className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" placeholder="PIN" value={newUserPin} onChange={e => setNewUserPin(e.target.value)} />
+              <select className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" value={newUserRole} onChange={e => setNewUserRole(e.target.value as Role)}>
+                <option value="admin">Admin</option>
+                <option value="cashier">Kasir</option>
+              </select>
+              <button onClick={handleAddUser} className="bg-accent hover:bg-emerald-600 text-primary font-bold px-3 py-2 rounded">Tambah</button>
+            </div>
+          </div>
+          {/* Edit Modal */}
+          {editUser && (
+            <Modal title="Edit Akun Login" onClose={() => setEditUser(null)}>
+              <div className="space-y-3">
+                <input type="text" className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" placeholder="Nama" value={editUserName} onChange={e => setEditUserName(e.target.value)} />
+                <input type="text" className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" placeholder="PIN" value={editUserPin} onChange={e => setEditUserPin(e.target.value)} />
+                <select className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm" value={editUserRole} onChange={e => setEditUserRole(e.target.value as Role)}>
+                  <option value="admin">Admin</option>
+                  <option value="cashier">Kasir</option>
+                </select>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => setEditUser(null)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded">Batal</button>
+                  <button onClick={handleEditUser} className="flex-1 bg-accent hover:bg-emerald-600 text-primary py-2 rounded font-bold">Simpan</button>
+                </div>
+              </div>
+            </Modal>
+          )}
+          {/* Delete Modal */}
+          {deleteUser && (
+            <Modal title="Hapus Akun Login" onClose={() => setDeleteUser(null)}>
+              <div className="space-y-4">
+                <p className="text-slate-300">Anda yakin ingin menghapus akun <span className="text-white font-bold">{deleteUser.name}</span>?</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setDeleteUser(null)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded">Batal</button>
+                  <button onClick={handleDeleteUser} className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded">Hapus</button>
+                </div>
+              </div>
+            </Modal>
+          )}
         </div>
 
         {/* 3. Shift Operators */}
