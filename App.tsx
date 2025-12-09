@@ -71,6 +71,26 @@ import {
 import { User, Product, Table, Transaction, CartItem, Variant, Ingredient, RecipeItem, Shift, Operator, StoreSettings } from './types';
 import { BluetoothPrinter } from './components/BluetoothPrinter';
 
+// --- Lamp control helpers ---
+// Map table number to toggle URL (4 meja)
+const TABLE_LAMP_URL = (num: number) => `http://192.168.100.120/led?num=${num}&state=TOGGLE`;
+
+// Toggle lamp with a fetch that respects CORS and has a timeout
+async function toggleLamp(num: number, timeout = 5000): Promise<{ ok: boolean; status?: number; text?: string; error?: string }> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  const url = TABLE_LAMP_URL(num);
+  try {
+    const res = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store', signal: controller.signal });
+    clearTimeout(id);
+    const text = await res.text().catch(() => undefined);
+    return { ok: res.ok, status: res.status, text };
+  } catch (err: any) {
+    clearTimeout(id);
+    return { ok: false, error: err.name === 'AbortError' ? 'timeout' : String(err) };
+  }
+}
+
 // --- Types & Constants ---
 const STORE_KEY = 'zyra_store_id';
 const SHIFT_KEY = 'zyra_active_shift';
@@ -2527,6 +2547,38 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ storeId, cart, currentUse
       }
 
       await Promise.all(batchPromises);
+
+      // After DB updates, toggle lamp(s) for newly occupied tables
+      try {
+        const lampTableNums: number[] = [];
+        for (const item of cart) {
+          if (item.itemType === 'table' && item.tableId) {
+            const tableIndex = tables.findIndex(t => t.id === item.tableId);
+            // If we can derive a table number (index+1) and it's not a topup, toggle
+            const table = tables[tableIndex];
+            const isTopup = table?.status === 'occupied';
+            if (table && !isTopup) {
+              const num = tableIndex >= 0 ? tableIndex + 1 : undefined;
+              if (num) lampTableNums.push(num);
+            }
+          }
+        }
+
+        if (lampTableNums.length > 0) {
+          const uniqueNums = Array.from(new Set(lampTableNums));
+          // Fire toggles in parallel, but don't block the success flow
+          Promise.allSettled(uniqueNums.map(n => toggleLamp(n))).then(results => {
+            const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !(r as any).value?.ok));
+            if (failed.length > 0) {
+              console.warn('Some lamp toggles failed', failed);
+            }
+          });
+        }
+
+      } catch (err) {
+        console.error('Lamp toggle error', err);
+      }
+
       alert(`Pembayaran Berhasil!\nKembalian: Rp ${change.toLocaleString()}`);
       onSuccess();
 
