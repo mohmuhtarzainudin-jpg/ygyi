@@ -91,6 +91,14 @@ async function toggleLamp(num: number, timeout = 5000): Promise<{ ok: boolean; s
   }
 }
 
+// Derive table number from table name (e.g. "Meja 1") or fallback to index+1
+function deriveTableNumber(tableName: string | undefined, index: number) {
+  if (!tableName) return index + 1;
+  const m = tableName.match(/(\d+)/);
+  if (m) return Number(m[1]);
+  return index + 1;
+}
+
 // --- Types & Constants ---
 const STORE_KEY = 'zyra_store_id';
 const SHIFT_KEY = 'zyra_active_shift';
@@ -172,8 +180,30 @@ const App: React.FC = () => {
       setIngredients(snap.docs.map(d => ({ id: d.id, ...d.data() } as Ingredient)));
     }, handleSnapshotError);
 
+    let prevTables: Table[] = [];
     const unsubTables = onSnapshot(query(collection(db, `stores/${storeId}/tables`), orderBy('name')), (snap) => {
-      setTables(snap.docs.map(d => ({ id: d.id, ...d.data() } as Table)));
+      const latest = snap.docs.map(d => ({ id: d.id, ...d.data() } as Table));
+
+      // Compare previous table statuses and toggle lamps on changes
+      for (let i = 0; i < latest.length; i++) {
+        const t = latest[i];
+        const p = prevTables.find(x => x.id === t.id);
+        const num = deriveTableNumber(t.name, i);
+        if (!p) {
+          if (t.status === 'occupied') {
+            toggleLamp(num).catch(e => console.warn('toggleLamp error', e));
+          }
+        } else if (p.status !== t.status) {
+          if (p.status !== 'occupied' && t.status === 'occupied') {
+            toggleLamp(num).catch(e => console.warn('toggleLamp error', e));
+          } else if (p.status === 'occupied' && t.status !== 'occupied') {
+            toggleLamp(num).catch(e => console.warn('toggleLamp error', e));
+          }
+        }
+      }
+
+      prevTables = latest;
+      setTables(latest);
     }, handleSnapshotError);
 
     const unsubUsers = onSnapshot(collection(db, `stores/${storeId}/users`), (snap) => {
@@ -204,6 +234,32 @@ const App: React.FC = () => {
       unsubOperators();
     };
   }, [storeId]);
+
+  // Auto-stop tables when their endTime passes (runs locally where this app is active).
+  // Warning: This will update Firestore to set table status to 'available' when timer expires.
+  useEffect(() => {
+    if (!storeId) return;
+    const iv = setInterval(() => {
+      const now = Date.now();
+      tables.forEach(async (t) => {
+        try {
+          if (t.status === 'occupied' && t.endTime && now >= t.endTime) {
+            // Mark table as available and clear timing fields
+            await updateDoc(doc(db, `stores/${storeId}/tables`, t.id), {
+              status: 'available',
+              startTime: deleteField(),
+              endTime: deleteField(),
+              duration: 0,
+              currentCustomer: deleteField()
+            });
+          }
+        } catch (e) {
+          console.warn('Auto-stop table failed', e);
+        }
+      });
+    }, 15 * 1000); // check every 15s
+    return () => clearInterval(iv);
+  }, [tables, storeId]);
 
   // --- Handlers ---
 
