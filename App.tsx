@@ -1,3 +1,4 @@
+// Zyra POS - Billiard & Cafe Management System
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
