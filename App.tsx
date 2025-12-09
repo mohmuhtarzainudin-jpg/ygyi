@@ -1620,13 +1620,29 @@ const TableManagementModal: React.FC<{ storeId: string, tables: Table[], onClose
                  value={newTableCost}
                  onChange={(e) => setNewTableCost(Number(e.target.value))}
                />
-               <input 
-                 type="text" 
-                 placeholder="Link Arduino (Optional)" 
-                 className="flex-1 bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
-                 value={newTableRemote}
-                 onChange={(e) => setNewTableRemote(e.target.value)}
-               />
+               <div className="flex-1 grid grid-cols-3 gap-2">
+                 <input
+                   type="text"
+                   placeholder="Link ON (Optional)"
+                   className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                   value={newTableRemoteOn}
+                   onChange={(e) => setNewTableRemoteOn(e.target.value)}
+                 />
+                 <input
+                   type="text"
+                   placeholder="Link OFF (Optional)"
+                   className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                   value={newTableRemoteOff}
+                   onChange={(e) => setNewTableRemoteOff(e.target.value)}
+                 />
+                 <input
+                   type="text"
+                   placeholder="Link TOGGLE (Optional)"
+                   className="bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm"
+                   value={newTableRemoteToggle}
+                   onChange={(e) => setNewTableRemoteToggle(e.target.value)}
+                 />
+               </div>
             </div>
             <button 
               onClick={handleAddTable}
